@@ -34,10 +34,11 @@ jobs:
       # ── 3. Run dashboard generator ───────────────────────────────────────
       - name: Generate Excel dashboard + data.json
         run: |
-          python "ST+GENERATEDASHBOARD~01.py" --folder data
+          mkdir -p docs outputs
+          python "ST+GENERATEDASHBOARD~01.py" --folder data --json-out docs/data.json
         # Outputs:
         #   data/FAOCLAUDE{YYYYMMDD}.xlsx  — Excel workbook
-        #   data/docs/data.json            — JSON data contract for website
+        #   docs/data.json                 — JSON data contract for website
 
       # ── 4. Move outputs to correct locations ─────────────────────────────
       - name: Move Excel to outputs/ and data.json to docs/
@@ -47,12 +48,8 @@ jobs:
             [ -f "$f" ] && mv "$f" outputs/ && echo "Moved $f to outputs/"
           done
 
-          # Move data.json from data/docs/ to docs/
-          if [ -f data/docs/data.json ]; then
-            mv data/docs/data.json docs/data.json
-            echo "Moved data.json to docs/data.json"
-            rmdir data/docs 2>/dev/null || true
-          fi
+          # data.json already written directly to docs/ via --json-out
+          [ -f docs/data.json ] && echo "docs/data.json present" || echo "WARNING: docs/data.json missing"
 
       # ── 5. Run website generator ─────────────────────────────────────────
       - name: Generate website

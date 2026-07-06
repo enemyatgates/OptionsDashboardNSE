@@ -1647,8 +1647,11 @@ def main():
     parser.add_argument(
         "--folder", required=True,
         help="Folder containing FAOOIYYYYMMDD, FAOTVYYYYMMDD, FAOOCYYYYMMDD CSV files")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--json-out", default=None,
+        help="Path to write data.json (default: <folder>/../docs/data.json)")
 
+    args = parser.parse_args()
     folder = args.folder
     if not Path(folder).is_dir():
         sys.exit(f"Folder not found: {folder}")
@@ -1770,9 +1773,11 @@ def main():
 
     # ── Export data.json ─────────────────────────────────────────────
     print('\nExporting data.json...')
-    docs_dir = Path(out_path).parent / 'docs'
-    docs_dir.mkdir(exist_ok=True)
-    json_path = str(docs_dir / 'data.json')
+    if args.json_out:
+        json_path = args.json_out
+    else:
+        json_path = str(Path(folder) / 'docs' / 'data.json')
+    Path(json_path).parent.mkdir(parents=True, exist_ok=True)
     export_json(
         out_path        = json_path,
         date_tag        = date_tag,
