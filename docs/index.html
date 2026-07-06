@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>FAO Claude — NSE Options Dashboard</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#0B0F1A;color:#F1F5F9;
+          margin:0;padding:40px 24px;}
+    h1{font-size:28px;margin-bottom:4px;}
+    .sub{color:#94A3B8;font-size:14px;margin-bottom:40px;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:40px;}
+    .card{background:#1E2535;border:1px solid #2A3347;border-radius:10px;padding:20px;}
+    .card-val{font-size:28px;font-weight:700;margin-bottom:4px;}
+    .card-lbl{font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;}
+    .blue{color:#3B82F6;} .amber{color:#F59E0B;} .green{color:#10B981;} .orange{color:#F97316;}
+    table{width:100%;border-collapse:collapse;background:#1E2535;
+           border:1px solid #2A3347;border-radius:10px;overflow:hidden;}
+    th{background:#374151;padding:10px 16px;text-align:left;font-size:12px;
+        text-transform:uppercase;letter-spacing:.05em;color:#94A3B8;}
+    td{padding:10px 16px;border-top:1px solid #2A3347;font-size:14px;}
+    .dl{margin-top:32px;}
+    .btn{display:inline-block;background:#3B82F6;color:#fff;padding:10px 22px;
+          border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;}
+    .notice{background:#1E2535;border:1px solid #374151;border-radius:8px;
+             padding:16px 20px;color:#94A3B8;font-size:13px;margin-top:40px;}
+    .dates{font-family:monospace;font-size:12px;color:#4B5563;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <h1>FAO Claude — NSE Options Dashboard</h1>
+  <div class="sub">Latest session: <strong>Jul 06 2026</strong> &nbsp;·&nbsp; Generated: 06 Jul 2026 22:10 UTC</div>
+
+  <!-- Key metrics -->
+  <div class="grid">
+    <div class="card">
+      <div class="card-val amber">24,200</div>
+      <div class="card-lbl">Max Pain Strike</div>
+    </div>
+    <div class="card">
+      <div class="card-val blue">24,000</div>
+      <div class="card-lbl">ATM Strike</div>
+    </div>
+    <div class="card">
+      <div class="card-val green">0.9965</div>
+      <div class="card-lbl">Aggregate OI PCR</div>
+    </div>
+    <div class="card">
+      <div class="card-val orange">25,000</div>
+      <div class="card-lbl">Top Call Wall</div>
+    </div>
+    <div class="card">
+      <div class="card-val orange">24,000</div>
+      <div class="card-lbl">Top Put Wall</div>
+    </div>
+    <div class="card">
+      <div class="card-val blue">5</div>
+      <div class="card-lbl">Sessions loaded</div>
+    </div>
+  </div>
+
+  <!-- Sentiment table -->
+  <h2 style="margin-bottom:16px;font-size:18px;">Composite Sentiment — Jul 06 2026</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Participant</th>
+        <th>Fut Index Direction</th>
+        <th>Index OI PCR</th>
+        <th>L/S Ratio</th>
+        <th>Signal</th>
+      </tr>
+    </thead>
+    <tbody><tr><td>Client</td><td>Net Long</td><td>1.2138</td><td>1.3357</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr><tr><td>DII</td><td>Net Long</td><td>6.2014</td><td>0.0945</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr><tr><td>FII</td><td>Net Short</td><td>2.0215</td><td>1.1119</td><td style="color:#F97316;font-weight:600">🟠 Cautious</td></tr><tr><td>Pro</td><td>Net Long</td><td>1.2954</td><td>1.1306</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr></tbody>
+  </table>
+
+  <!-- Excel download -->
+  <div class="dl">
+    <a class="btn" href="../outputs/FAOCLAUDE20260706.xlsx" download>
+      ⬇ Download Excel Dashboard (FAOCLAUDE20260706.xlsx)
+    </a>
+  </div>
+
+  <div class="notice">
+    <strong>🚧 Full interactive D3 dashboard coming in Step 3.</strong><br/>
+    This placeholder confirms the GitHub Actions pipeline is wired correctly —
+    data flows from CSVs → data.json → website on every push to <code>data/</code>.
+    <div class="dates">Sessions: Jun 30 2026 · Jul 01 2026 · Jul 02 2026 · Jul 03 2026 · Jul 06 2026</div>
+  </div>
+</body>
+</html>
