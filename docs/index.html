@@ -4,88 +4,761 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>FAO Claude — NSE Options Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <style>
-    body{font-family:system-ui,sans-serif;background:#0B0F1A;color:#F1F5F9;
-          margin:0;padding:40px 24px;}
-    h1{font-size:28px;margin-bottom:4px;}
-    .sub{color:#94A3B8;font-size:14px;margin-bottom:40px;}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:40px;}
-    .card{background:#1E2535;border:1px solid #2A3347;border-radius:10px;padding:20px;}
-    .card-val{font-size:28px;font-weight:700;margin-bottom:4px;}
-    .card-lbl{font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;}
-    .blue{color:#3B82F6;} .amber{color:#F59E0B;} .green{color:#10B981;} .orange{color:#F97316;}
-    table{width:100%;border-collapse:collapse;background:#1E2535;
-           border:1px solid #2A3347;border-radius:10px;overflow:hidden;}
-    th{background:#374151;padding:10px 16px;text-align:left;font-size:12px;
-        text-transform:uppercase;letter-spacing:.05em;color:#94A3B8;}
-    td{padding:10px 16px;border-top:1px solid #2A3347;font-size:14px;}
-    .dl{margin-top:32px;}
-    .btn{display:inline-block;background:#3B82F6;color:#fff;padding:10px 22px;
-          border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;}
-    .notice{background:#1E2535;border:1px solid #374151;border-radius:8px;
-             padding:16px 20px;color:#94A3B8;font-size:13px;margin-top:40px;}
-    .dates{font-family:monospace;font-size:12px;color:#4B5563;margin-top:8px;}
+    /* ── Reset ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0B0F1A;
+      --surface:   #141824;
+      --surface2:  #1E2535;
+      --border:    #2A3347;
+      --border2:   #374151;
+      --call:      #3B82F6;
+      --call-dim:  rgba(59,130,246,0.12);
+      --put:       #F97316;
+      --put-dim:   rgba(249,115,22,0.12);
+      --green:     #10B981;
+      --green-dim: rgba(16,185,129,0.10);
+      --amber:     #F59E0B;
+      --amber-dim: rgba(245,158,11,0.12);
+      --red:       #EF4444;
+      --text:      #F1F5F9;
+      --muted:     #94A3B8;
+      --faint:     #4B5563;
+      --mono:      'JetBrains Mono', 'Fira Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+      --nav-h:     52px;
+      --tab-h:     44px;
+    }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top nav ────────────────────────────────────── */
+    .topnav {
+      height: var(--nav-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 20px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .nav-logo {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .nav-logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--call);
+      flex-shrink: 0;
+    }
+    .nav-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--border2);
+    }
+    .nav-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .nav-meta-item { display: flex; align-items: center; gap: 5px; }
+    .nav-meta-label { color: var(--faint); }
+    .nav-meta-val   { color: var(--text); }
+    .nav-meta-val.green { color: var(--green); }
+    .nav-meta-val.amber { color: var(--amber); }
+    .nav-meta-val.call  { color: var(--call); }
+    .nav-meta-val.put   { color: var(--put); }
+    .nav-spacer { flex: 1; }
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--faint);
+    }
+    .status-dot.loading { background: var(--amber); animation: pulse 1s infinite; }
+    .status-dot.ok      { background: var(--green); }
+    .status-dot.error   { background: var(--red); }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: .3; }
+    }
+    .nav-dl {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--call);
+      color: #fff;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: opacity .2s;
+    }
+    .nav-dl:hover { opacity: .85; }
+
+    /* ── Tab bar ────────────────────────────────────── */
+    .tabbar {
+      height: var(--tab-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      padding: 0 24px;
+      gap: 2px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabbar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--call);
+      border-bottom-color: var(--call);
+    }
+    .tab-icon { font-size: 14px; }
+
+    /* ── Main content ───────────────────────────────── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 24px;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Metrics strip ──────────────────────────────── */
+    .metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .metric-val {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: var(--mono);
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .metric-lbl {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .metric-sub {
+      font-size: 11px;
+      color: var(--faint);
+      margin-top: 3px;
+      font-family: var(--mono);
+    }
+    .c-call  { color: var(--call); }
+    .c-put   { color: var(--put); }
+    .c-green { color: var(--green); }
+    .c-amber { color: var(--amber); }
+    .c-muted { color: var(--muted); }
+
+    /* ── Section headers ────────────────────────────── */
+    .section-hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 16px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .section-rule {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .section-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--faint);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    /* ── Sentiment table ────────────────────────────── */
+    .sent-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+    .sent-table th {
+      background: var(--surface2);
+      padding: 9px 16px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+    .sent-table td {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+    .sent-table tr:first-child td { border-top: none; }
+    .sent-table tr:hover td { background: var(--surface2); }
+
+    /* ── Chain summary cards ────────────────────────── */
+    .walls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .wall-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .wall-card-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .wall-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .wall-row:last-child { border-bottom: none; }
+    .wall-rank { color: var(--faint); width: 20px; }
+    .wall-strike { color: var(--text); font-weight: 600; }
+    .wall-oi { color: var(--muted); }
+    .wall-bar-wrap {
+      width: 80px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .wall-bar { height: 100%; border-radius: 2px; }
+
+    /* ── Placeholder panels ─────────────────────────── */
+    .placeholder {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 60px 40px;
+      text-align: center;
+    }
+    .placeholder-icon { font-size: 40px; margin-bottom: 16px; }
+    .placeholder-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .placeholder-sub {
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 400px;
+      margin: 0 auto 20px;
+      line-height: 1.6;
+    }
+    .placeholder-tag {
+      display: inline-block;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Data badge (bottom-right) ──────────────────── */
+    .data-badge {
+      position: fixed;
+      bottom: 16px;
+      right: 20px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 40;
+    }
+    .data-badge-item { display: flex; gap: 5px; }
+    .data-badge-lbl { color: var(--faint); }
+    .data-badge-sep { color: var(--faint); }
+
+    /* ── Scrollbar ──────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
   </style>
 </head>
 <body>
-  <h1>FAO Claude — NSE Options Dashboard</h1>
-  <div class="sub">Latest session: <strong>Jul 06 2026</strong> &nbsp;·&nbsp; Generated: 06 Jul 2026 22:10 UTC</div>
 
-  <!-- Key metrics -->
-  <div class="grid">
-    <div class="card">
-      <div class="card-val amber">24,200</div>
-      <div class="card-lbl">Max Pain Strike</div>
+<!-- ── Top nav ──────────────────────────────────────────────────────── -->
+<nav class="topnav">
+  <div class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    FAO Claude
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-meta">
+    <div class="nav-meta-item">
+      <span class="nav-meta-label">Session</span>
+      <span class="nav-meta-val">Jul 01 2026</span>
     </div>
-    <div class="card">
-      <div class="card-val blue">24,000</div>
-      <div class="card-lbl">ATM Strike</div>
+    <div class="nav-meta-item">
+      <span class="nav-meta-label">Max Pain</span>
+      <span class="nav-meta-val amber">24,200</span>
     </div>
-    <div class="card">
-      <div class="card-val green">0.9965</div>
-      <div class="card-lbl">Aggregate OI PCR</div>
+    <div class="nav-meta-item">
+      <span class="nav-meta-label">PCR</span>
+      <span class="nav-meta-val green" id="nav-pcr">0.997</span>
     </div>
-    <div class="card">
-      <div class="card-val orange">25,000</div>
-      <div class="card-lbl">Top Call Wall</div>
+    <div class="nav-meta-item">
+      <span class="nav-meta-label">Call Wall</span>
+      <span class="nav-meta-val call">25,000</span>
     </div>
-    <div class="card">
-      <div class="card-val orange">24,000</div>
-      <div class="card-lbl">Top Put Wall</div>
+    <div class="nav-meta-item">
+      <span class="nav-meta-label">Put Wall</span>
+      <span class="nav-meta-val put">24,000</span>
     </div>
-    <div class="card">
-      <div class="card-val blue">5</div>
-      <div class="card-lbl">Sessions loaded</div>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-status">
+    <span class="status-dot loading" id="status-dot"></span>
+    <span id="status-text">Loading data…</span>
+  </div>
+  <a class="nav-dl" href="../outputs/FAOCLAUDE20260701.xlsx" download title="Download Excel dashboard">
+    ⬇ Excel
+  </a>
+</nav>
+
+<!-- ── Tab bar ──────────────────────────────────────────────────────── -->
+<div class="tabbar" id="tabbar">
+  <button class="tab-btn active" data-tab="overview">
+    <span class="tab-icon">◎</span> Overview
+  </button>
+  <button class="tab-btn" data-tab="participant">
+    <span class="tab-icon">⊞</span> Participant OI &amp; TV
+  </button>
+  <button class="tab-btn" data-tab="pcr">
+    <span class="tab-icon">⇅</span> PCR Analysis
+  </button>
+  <button class="tab-btn" data-tab="bias">
+    <span class="tab-icon">⊿</span> Net Bias &amp; Efficiency
+  </button>
+  <button class="tab-btn" data-tab="chain">
+    <span class="tab-icon">≡</span> Option Chain
+  </button>
+  <button class="tab-btn" data-tab="maxpain">
+    <span class="tab-icon">⊗</span> Max Pain
+  </button>
+  <button class="tab-btn" data-tab="ivskew">
+    <span class="tab-icon">∿</span> IV Skew
+  </button>
+  <button class="tab-btn" data-tab="history">
+    <span class="tab-icon">⏱</span> Historical Trends
+  </button>
+</div>
+
+<!-- ── Main content ─────────────────────────────────────────────────── -->
+<main class="main" id="main">
+
+  <!-- Overview -->
+  <div class="tab-panel active" id="tab-overview">
+
+    <!-- Key metrics -->
+    <div class="metrics-strip">
+      <div class="metric-card">
+        <div class="metric-val c-amber" id="ov-maxpain">—</div>
+        <div class="metric-lbl">Max Pain Strike</div>
+        <div class="metric-sub" id="ov-maxpain-sub">loading…</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val c-call" id="ov-atm">—</div>
+        <div class="metric-lbl">ATM Strike</div>
+        <div class="metric-sub" id="ov-atm-sub">loading…</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val c-green" id="ov-pcr">—</div>
+        <div class="metric-lbl">Aggregate OI PCR</div>
+        <div class="metric-sub" id="ov-pcr-sub">Put OI / Call OI</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val c-call" id="ov-callwall">—</div>
+        <div class="metric-lbl">Call Wall (Resistance)</div>
+        <div class="metric-sub" id="ov-callwall-sub">loading…</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val c-put" id="ov-putwall">—</div>
+        <div class="metric-lbl">Put Wall (Support)</div>
+        <div class="metric-sub" id="ov-putwall-sub">loading…</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val c-muted" id="ov-sessions">—</div>
+        <div class="metric-lbl">Sessions Loaded</div>
+        <div class="metric-sub" id="ov-dates-sub">loading…</div>
+      </div>
+    </div>
+
+    <!-- Sentiment -->
+    <div class="section-hdr">
+      <div class="section-title">Composite Sentiment</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="sent-date-tag">—</div>
+    </div>
+    <table class="sent-table" id="sent-table">
+      <thead>
+        <tr>
+          <th>Participant</th>
+          <th>Fut Index Direction</th>
+          <th>Index OI PCR</th>
+          <th>L/S Ratio</th>
+          <th>Signal</th>
+        </tr>
+      </thead>
+      <tbody id="sent-tbody">
+        <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">
+          Loading…
+        </td></tr>
+      </tbody>
+    </table>
+
+    <!-- OI Walls -->
+    <div class="section-hdr">
+      <div class="section-title">OI Walls</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">Top 5 strikes</div>
+    </div>
+    <div class="walls-grid">
+      <div class="wall-card">
+        <div class="wall-card-title" style="color:var(--call)">⬆ Call Wall — Resistance</div>
+        <div id="call-walls-body"></div>
+      </div>
+      <div class="wall-card">
+        <div class="wall-card-title" style="color:var(--put)">⬇ Put Wall — Support</div>
+        <div id="put-walls-body"></div>
+      </div>
+    </div>
+
+  </div><!-- /overview -->
+
+  <!-- Participant OI & TV -->
+  <div class="tab-panel" id="tab-participant">
+    <div class="placeholder">
+      <div class="placeholder-icon">⊞</div>
+      <div class="placeholder-title">Participant OI &amp; TV</div>
+      <div class="placeholder-sub">
+        Long/Short OI, Net OI, L/S ratios and market share per participant across all sessions.
+        Charts built in Step 5.
+      </div>
+      <span class="placeholder-tag">Step 5</span>
     </div>
   </div>
 
-  <!-- Sentiment table -->
-  <h2 style="margin-bottom:16px;font-size:18px;">Composite Sentiment — Jul 06 2026</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Participant</th>
-        <th>Fut Index Direction</th>
-        <th>Index OI PCR</th>
-        <th>L/S Ratio</th>
-        <th>Signal</th>
-      </tr>
-    </thead>
-    <tbody><tr><td>Client</td><td>Net Long</td><td>1.2138</td><td>1.3357</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr><tr><td>DII</td><td>Net Long</td><td>6.2014</td><td>0.0945</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr><tr><td>FII</td><td>Net Short</td><td>2.0215</td><td>1.1119</td><td style="color:#F97316;font-weight:600">🟠 Cautious</td></tr><tr><td>Pro</td><td>Net Long</td><td>1.2954</td><td>1.1306</td><td style="color:#94A3B8;font-weight:600">🟡 Neutral</td></tr></tbody>
-  </table>
-
-  <!-- Excel download -->
-  <div class="dl">
-    <a class="btn" href="../outputs/FAOCLAUDE20260706.xlsx" download>
-      ⬇ Download Excel Dashboard (FAOCLAUDE20260706.xlsx)
-    </a>
+  <!-- PCR Analysis -->
+  <div class="tab-panel" id="tab-pcr">
+    <div class="placeholder">
+      <div class="placeholder-icon">⇅</div>
+      <div class="placeholder-title">PCR Analysis</div>
+      <div class="placeholder-sub">
+        Participant-level PCR trends (OI + volume), aggregate chain PCR, net PCR and short-side PCR.
+        Charts built in Step 6.
+      </div>
+      <span class="placeholder-tag">Step 6</span>
+    </div>
   </div>
 
-  <div class="notice">
-    <strong>🚧 Full interactive D3 dashboard coming in Step 3.</strong><br/>
-    This placeholder confirms the GitHub Actions pipeline is wired correctly —
-    data flows from CSVs → data.json → website on every push to <code>data/</code>.
-    <div class="dates">Sessions: Jun 30 2026 · Jul 01 2026 · Jul 02 2026 · Jul 03 2026 · Jul 06 2026</div>
+  <!-- Net Bias & Efficiency -->
+  <div class="tab-panel" id="tab-bias">
+    <div class="placeholder">
+      <div class="placeholder-icon">⊿</div>
+      <div class="placeholder-title">Net Bias &amp; Efficiency</div>
+      <div class="placeholder-sub">
+        Net OI trends, OI-TV efficiency ratio, net conviction cross-check per participant.
+        Charts built in Step 7.
+      </div>
+      <span class="placeholder-tag">Step 7</span>
+    </div>
   </div>
+
+  <!-- Option Chain -->
+  <div class="tab-panel" id="tab-chain">
+    <div class="placeholder">
+      <div class="placeholder-icon">≡</div>
+      <div class="placeholder-title">Option Chain</div>
+      <div class="placeholder-sub">
+        Strike table (ATM ±20, expandable), OI bar chart per strike, per-strike PCR.
+        Built in Step 8.
+      </div>
+      <span class="placeholder-tag">Step 8</span>
+    </div>
+  </div>
+
+  <!-- Max Pain -->
+  <div class="tab-panel" id="tab-maxpain">
+    <div class="placeholder">
+      <div class="placeholder-icon">⊗</div>
+      <div class="placeholder-title">Max Pain</div>
+      <div class="placeholder-sub">
+        Per-strike pain heatmap, max pain trend across sessions.
+        Built in Step 9.
+      </div>
+      <span class="placeholder-tag">Step 9</span>
+    </div>
+  </div>
+
+  <!-- IV Skew -->
+  <div class="tab-panel" id="tab-ivskew">
+    <div class="placeholder">
+      <div class="placeholder-icon">∿</div>
+      <div class="placeholder-title">IV Skew</div>
+      <div class="placeholder-sub">
+        Call vs Put IV curve across strikes, put-call skew differential.
+        Built in Step 10.
+      </div>
+      <span class="placeholder-tag">Step 10</span>
+    </div>
+  </div>
+
+  <!-- Historical Trends -->
+  <div class="tab-panel" id="tab-history">
+    <div class="placeholder">
+      <div class="placeholder-icon">⏱</div>
+      <div class="placeholder-title">Historical Trends</div>
+      <div class="placeholder-sub">
+        All metrics trended across every session in the data folder —
+        FII net futures OI, PCR, max pain, participant market share.
+        Built in Step 11.
+      </div>
+      <span class="placeholder-tag">Step 11</span>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Data badge ────────────────────────────────────────────────────── -->
+<div class="data-badge" id="data-badge">
+  <div class="data-badge-item">
+    <span class="data-badge-lbl">generated</span>
+    <span id="badge-gen">—</span>
+  </div>
+  <span class="data-badge-sep">·</span>
+  <div class="data-badge-item">
+    <span class="data-badge-lbl">sessions</span>
+    <span id="badge-sessions">—</span>
+  </div>
+  <span class="data-badge-sep">·</span>
+  <div class="data-badge-item">
+    <span class="data-badge-lbl">strikes</span>
+    <span id="badge-strikes">—</span>
+  </div>
+</div>
+
+<script>
+/* ── Tab switching ─────────────────────────────────────────────────── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + id).classList.add('active');
+  });
+});
+
+/* ── Formatters ────────────────────────────────────────────────────── */
+const fmtN  = v => v == null ? '—' : d3.format(',')(Math.round(v));
+const fmtF  = v => v == null ? '—' : d3.format('.3f')(v);
+const fmtF2 = v => v == null ? '—' : d3.format('.2f')(v);
+
+/* ── Sentiment colours ─────────────────────────────────────────────── */
+const SIG_COL  = { Bullish:'#10B981', Cautious:'#F97316', Bearish:'#EF4444', Neutral:'#94A3B8' };
+const SIG_ICON = { Bullish:'🟢', Cautious:'🟠', Bearish:'🔴', Neutral:'🟡' };
+
+/* ── Load data.json ────────────────────────────────────────────────── */
+const setStatus = (state, msg) => {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  dot.className  = 'status-dot ' + state;
+  text.textContent = msg;
+};
+
+async function loadData() {
+  setStatus('loading', 'Loading data…');
+  let data;
+  try {
+    const res = await fetch('./data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+    setStatus('ok', 'Data loaded');
+    console.log('[FAO Claude] data.json loaded:', data);
+  } catch (err) {
+    setStatus('error', 'Failed to load data.json');
+    console.error('[FAO Claude] fetch error:', err);
+    return;
+  }
+  render(data);
+}
+
+/* ── Main render ───────────────────────────────────────────────────── */
+function render(data) {
+  const meta  = data.meta  || {};
+  const chain = data.chain || {};
+  const sent  = data.sentiment || {};
+  const latest = meta.latest_date || '—';
+  const dates  = meta.oi_dates   || [];
+
+  /* Nav meta already server-rendered; update badge */
+  document.getElementById('badge-gen').textContent      = (meta.generated_at || '').slice(0,10);
+  document.getElementById('badge-sessions').textContent = dates.length;
+  document.getElementById('badge-strikes').textContent  = (chain.data || []).length;
+
+  /* ── Overview metrics ── */
+  document.getElementById('ov-maxpain').textContent     = fmtN(chain.max_pain);
+  document.getElementById('ov-atm').textContent         = fmtN(chain.atm);
+  document.getElementById('ov-pcr').textContent         = fmtF(chain.oi_pcr);
+  document.getElementById('ov-sessions').textContent    = dates.length;
+  document.getElementById('ov-maxpain-sub').textContent = latest;
+  document.getElementById('ov-atm-sub').textContent     = 'Highest combined OI';
+  document.getElementById('ov-pcr-sub').textContent     =
+    `Put ${fmtN(chain.total_put_oi)} / Call ${fmtN(chain.total_call_oi)}`;
+  document.getElementById('ov-dates-sub').textContent   =
+    dates.length ? dates[0] + ' → ' + dates[dates.length-1] : '—';
+
+  const callWalls = chain.call_walls || [];
+  const putWalls  = chain.put_walls  || [];
+  document.getElementById('ov-callwall').textContent     = fmtN(callWalls[0]?.strike);
+  document.getElementById('ov-putwall').textContent      = fmtN(putWalls[0]?.strike);
+  document.getElementById('ov-callwall-sub').textContent =
+    callWalls[0] ? `OI: ${fmtN(callWalls[0].oi)}` : '—';
+  document.getElementById('ov-putwall-sub').textContent  =
+    putWalls[0] ? `OI: ${fmtN(putWalls[0].oi)}` : '—';
+
+  /* ── Sentiment table ── */
+  document.getElementById('sent-date-tag').textContent = latest;
+  const sentLatest = (sent.data || {})[latest] || {};
+  const tbody = document.getElementById('sent-tbody');
+  tbody.innerHTML = '';
+  ['Client','DII','FII','Pro'].forEach(part => {
+    const s    = sentLatest[part] || {};
+    const sig  = s.signal || 'Neutral';
+    const col  = SIG_COL[sig]  || '#94A3B8';
+    const icon = SIG_ICON[sig] || '🟡';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600">${part}</td>
+      <td>${s.net_fut_idx_dir || '—'}</td>
+      <td>${fmtF2(s.idx_oi_pcr)}</td>
+      <td>${fmtF2(s.ls_ratio)}</td>
+      <td style="color:${col};font-weight:600">${icon} ${sig}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  /* ── OI Walls ── */
+  const maxCallOI = Math.max(...callWalls.map(w => w.oi || 0), 1);
+  const maxPutOI  = Math.max(...putWalls.map(w => w.oi  || 0), 1);
+
+  function wallRows(walls, maxOI, colour) {
+    return walls.slice(0, 5).map((w, i) => {
+      const pct = ((w.oi || 0) / maxOI * 100).toFixed(0);
+      return `
+        <div class="wall-row">
+          <span class="wall-rank">${i+1}</span>
+          <span class="wall-strike">${fmtN(w.strike)}</span>
+          <span class="wall-oi">${fmtN(w.oi)}</span>
+          <div class="wall-bar-wrap">
+            <div class="wall-bar" style="width:${pct}%;background:${colour}"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+  document.getElementById('call-walls-body').innerHTML =
+    wallRows(callWalls, maxCallOI, 'var(--call)');
+  document.getElementById('put-walls-body').innerHTML  =
+    wallRows(putWalls,  maxPutOI,  'var(--put)');
+
+  console.log('[FAO Claude] Overview rendered. D3 version:', d3.version);
+}
+
+loadData();
+</script>
 </body>
 </html>
