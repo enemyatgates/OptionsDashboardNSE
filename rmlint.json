@@ -1,0 +1,45 @@
+[
+{
+  "description": "rmlint json-dump of lint files",
+  "cwd": "/home/thorianvc/.zSites/OptionsDashBoardNSE/",
+  "args": "rmlint --types=duplicates /mnt/a/Z+00/Z+00+00/Z+00+00+01/Z+00+00+01+TVC00/Z+00+00+01+TVC00+DOWNLOADS/",
+  "version": "2.9.0",
+  "rev": "2.3",
+  "progress": 0,
+  "checksum_type": "blake2b"
+}, {
+  "id": 102430396,
+  "type": "duplicate_file",
+  "progress": 86,
+  "checksum": "b2ef8852b0df7ef92d50bd256c99d10b91395fb18a1d949b2c293a8430d51ca5a21e98778a780b3037068f791bd6139aa4901629e6b390d1b33dd8bdce6e89d2",
+  "path": "/mnt/a/Z+00/Z+00+00/Z+00+00+01/Z+00+00+01+TVC00/Z+00+00+01+TVC00+DOWNLOADS/ST+GENERATEDASHBOARD~01.py",
+  "size": 92973,
+  "twins": 2,
+  "depth": 1,
+  "inode": 4503599627379341,
+  "disk_id": 70,
+  "is_original": true,
+  "mtime": 1783296935.2388399
+}, {
+  "id": 2364765727,
+  "type": "duplicate_file",
+  "progress": 86,
+  "checksum": "b2ef8852b0df7ef92d50bd256c99d10b91395fb18a1d949b2c293a8430d51ca5a21e98778a780b3037068f791bd6139aa4901629e6b390d1b33dd8bdce6e89d2",
+  "path": "/mnt/a/Z+00/Z+00+00/Z+00+00+01/Z+00+00+01+TVC00/Z+00+00+01+TVC00+DOWNLOADS/ST+GENERATEDASHBOARD~01 (1).py",
+  "size": 92973,
+  "twins": 2,
+  "depth": 1,
+  "inode": 6473924464355661,
+  "disk_id": 70,
+  "is_original": false,
+  "mtime": 1783297787.1104889
+}, {
+  "aborted": false,
+  "progress": 100,
+  "total_files": 191,
+  "ignored_files": 0,
+  "ignored_folders": 0,
+  "duplicates": 1,
+  "duplicate_sets": 1,
+  "total_lint_size": 92973
+}]

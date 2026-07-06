@@ -1,0 +1,114 @@
+name: Generate FAO Dashboard
+
+on:
+  push:
+    paths:
+      - "data/**"         # triggers only when files in data/ are pushed
+  workflow_dispatch:      # allows manual trigger from GitHub Actions UI
+
+permissions:
+  contents: write         # needed to commit outputs back to the repo
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history so git log works
+
+      # ── 2. Python setup ──────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install pandas openpyxl
+
+      # ── 3. Run dashboard generator ───────────────────────────────────────
+      - name: Generate Excel dashboard + data.json
+        run: |
+          python "ST+GENERATEDASHBOARD~01.py" --folder data
+        # Outputs:
+        #   data/FAOCLAUDE{YYYYMMDD}.xlsx  — Excel workbook
+        #   data/docs/data.json            — JSON data contract for website
+
+      # ── 4. Move outputs to correct locations ─────────────────────────────
+      - name: Move Excel to outputs/ and data.json to docs/
+        run: |
+          # Move Excel file(s) from data/ to outputs/
+          for f in data/FAOCLAUDE*.xlsx; do
+            [ -f "$f" ] && mv "$f" outputs/ && echo "Moved $f to outputs/"
+          done
+
+          # Move data.json from data/docs/ to docs/
+          if [ -f data/docs/data.json ]; then
+            mv data/docs/data.json docs/data.json
+            echo "Moved data.json to docs/data.json"
+            rmdir data/docs 2>/dev/null || true
+          fi
+
+      # ── 5. Run website generator ─────────────────────────────────────────
+      - name: Generate website
+        run: |
+          python "ST+GENERATEWEBSITE~01.py" \
+            --data  docs/data.json \
+            --out   docs/index.html
+        # Reads:  docs/data.json
+        # Writes: docs/index.html
+
+      # ── 6. Write Excel filename metadata for download link ───────────────
+      - name: Write docs/meta.json
+        run: |
+          python - << 'PYEOF'
+          import json, glob, os
+          files = sorted(glob.glob("outputs/FAOCLAUDE*.xlsx"))
+          latest = os.path.basename(files[-1]) if files else None
+          all_f  = [os.path.basename(x) for x in files]
+          with open("docs/meta.json", "w") as f:
+              json.dump({"excel_filename": latest, "all_excels": all_f}, f)
+          print(f"meta.json written — latest: {latest}")
+          PYEOF
+
+      # ── 7. Commit everything back to main ────────────────────────────────
+      - name: Commit and push outputs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/data.json
+          git add docs/index.html
+          git add docs/meta.json
+          git add outputs/
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            LATEST=$(ls outputs/FAOCLAUDE*.xlsx 2>/dev/null | sort | tail -1 | xargs basename 2>/dev/null || echo "unknown")
+            DATE_TAG=$(echo "$LATEST" | grep -oP '\d{8}' | head -1 || echo "unknown")
+            git commit -m "Dashboard update — ${DATE_TAG} [skip ci]"
+            git push
+            echo "Committed and pushed."
+          fi
+
+      # ── 8. Job summary ───────────────────────────────────────────────────
+      - name: Print run summary
+        if: always()
+        run: |
+          echo "### FAO Dashboard — Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Output | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          for f in outputs/FAOCLAUDE*.xlsx; do
+            [ -f "$f" ] && echo "| \`$(basename $f)\` | ✅ |" >> $GITHUB_STEP_SUMMARY
+          done
+          [ -f docs/data.json ]  && echo "| \`docs/data.json\`  | ✅ |" >> $GITHUB_STEP_SUMMARY
+          [ -f docs/index.html ] && echo "| \`docs/index.html\` | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 https://enemyatgates.github.io/OptionsDashboardNSE" >> $GITHUB_STEP_SUMMARY
