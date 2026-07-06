@@ -381,6 +381,76 @@ HTML = r"""<!DOCTYPE html>
       overflow: hidden;
     }
     .wall-bar { height: 100%; border-radius: 2px; }
+    /* ── Charts ─────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 16px 12px;
+    }
+    .chart-card.wide {
+      grid-column: 1 / -1;
+    }
+    .chart-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .chart-sub {
+      font-size: 11px;
+      color: var(--faint);
+      margin-bottom: 12px;
+      font-family: var(--mono);
+    }
+    .chart-svg { width: 100%; display: block; }
+    /* D3 axis */
+    .axis text {
+      fill: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+    .axis line, .axis path { stroke: var(--border2); }
+    .axis-zero line { stroke: var(--border2); stroke-dasharray: 3,3; }
+    .grid line {
+      stroke: var(--border);
+      stroke-opacity: .6;
+      stroke-dasharray: 2,3;
+    }
+    .grid path { stroke-width: 0; }
+    /* Tooltip */
+    .d3-tip {
+      position: absolute;
+      pointer-events: none;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.7;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      max-width: 200px;
+      z-index: 99;
+    }
+    /* Legend */
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+    }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-line {
+      width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0;
+    }
+
 
     /* ── Placeholder panels ─────────────────────────── */
     .placeholder {
@@ -590,6 +660,38 @@ HTML = r"""<!DOCTYPE html>
       </div>
     </div>
 
+
+    <!-- Chart row 1: Net Futures OI Trend (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">Net Futures OI — All Participants</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">across loaded sessions</div>
+    </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Net Index Futures OI (Long − Short) per participant</div>
+      <div class="legend" id="trend-legend"></div>
+      <svg class="chart-svg" id="chart-trend"></svg>
+    </div>
+
+    <!-- Chart row 2: OI Breakdown + DoD Change -->
+    <div class="section-hdr">
+      <div class="section-title">Latest Session Analysis</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="chart-date-tag">—</div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">OI Breakdown — Long vs Short</div>
+        <div class="chart-sub">Total Long &amp; Short OI per participant</div>
+        <svg class="chart-svg" id="chart-breakdown"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Day-on-Day Net OI Change</div>
+        <div class="chart-sub" id="dod-sub">vs previous session</div>
+        <svg class="chart-svg" id="chart-dod"></svg>
+      </div>
+    </div>
+
   </div><!-- /overview -->
 
   <!-- Participant OI & TV -->
@@ -687,6 +789,7 @@ HTML = r"""<!DOCTYPE html>
 </main>
 
 <!-- ── Data badge ────────────────────────────────────────────────────── -->
+<div class="d3-tip" id="d3-tip" style="display:none"></div>
 <div class="data-badge" id="data-badge">
   <div class="data-badge-item">
     <span class="data-badge-lbl">generated</span>
@@ -826,6 +929,264 @@ function render(data) {
     wallRows(callWalls, maxCallOI, 'var(--call)');
   document.getElementById('put-walls-body').innerHTML  =
     wallRows(putWalls,  maxPutOI,  'var(--put)');
+
+
+  /* ── Chart constants ── */
+  const PART_COLORS = {
+    Client: '#94A3B8',
+    DII:    '#10B981',
+    FII:    '#3B82F6',
+    Pro:    '#F97316',
+  };
+  const PARTS = ['Client','DII','FII','Pro'];
+  const tip   = document.getElementById('d3-tip');
+
+  function showTip(html, event) {
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    moveTip(event);
+  }
+  function moveTip(event) {
+    const x = event.pageX + 14;
+    const y = event.pageY - 28;
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+
+  /* ── Chart 1: Net Futures OI Trend ── */
+  function drawTrend(oiData, dates) {
+    if (!dates || dates.length < 2) return;
+    document.getElementById('chart-date-tag').textContent = dates[dates.length-1];
+
+    const el   = document.getElementById('chart-trend');
+    const W    = el.parentElement.clientWidth - 32;
+    const H    = 220;
+    const mg   = { top: 12, right: 20, bottom: 32, left: 80 };
+    const iw   = W - mg.left - mg.right;
+    const ih   = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+    const svg = d3.select(el);
+    svg.selectAll('*').remove();
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    // Build series: {part, values:[{date, val}]}
+    const series = PARTS.map(part => ({
+      part,
+      values: dates.map(d => ({
+        date: d,
+        val:  (((oiData[d] || {})[part] || {}).net_fut_idx) ?? 0,
+      })),
+    }));
+
+    const allVals = series.flatMap(s => s.values.map(v => v.val));
+    const yMax    = Math.max(Math.abs(d3.max(allVals)), Math.abs(d3.min(allVals)), 1);
+
+    const xScale = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const yScale = d3.scaleLinear().domain([-yMax * 1.1, yMax * 1.1]).range([ih, 0]);
+
+    // Grid
+    g.append('g').attr('class','grid')
+      .call(d3.axisLeft(yScale).tickSize(-iw).tickFormat('').ticks(5));
+
+    // Zero line
+    g.append('line')
+      .attr('x1', 0).attr('x2', iw)
+      .attr('y1', yScale(0)).attr('y2', yScale(0))
+      .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+
+    // Axes
+    g.append('g').attr('class','axis')
+      .attr('transform', `translate(0,${ih})`)
+      .call(d3.axisBottom(xScale).tickSize(3));
+
+    g.append('g').attr('class','axis')
+      .call(d3.axisLeft(yScale).ticks(5)
+        .tickFormat(v => {
+          const a = Math.abs(v);
+          return (a >= 1e6 ? d3.format('.1f')(v/1e6)+'M'
+                : a >= 1e3 ? d3.format('.0f')(v/1e3)+'K' : v);
+        }));
+
+    // Lines
+    const line = d3.line()
+      .x(d => xScale(d.date))
+      .y(d => yScale(d.val))
+      .curve(d3.curveMonotoneX);
+
+    series.forEach(s => {
+      g.append('path')
+        .datum(s.values)
+        .attr('fill','none')
+        .attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+      // Dots
+      g.selectAll(`.dot-${s.part}`)
+        .data(s.values)
+        .join('circle')
+        .attr('cx', d => xScale(d.date))
+        .attr('cy', d => yScale(d.val))
+        .attr('r', 4)
+        .attr('fill', PART_COLORS[s.part])
+        .attr('stroke','var(--surface)').attr('stroke-width',2)
+        .style('cursor','pointer')
+        .on('mouseover', (ev, d) => {
+          const dir = d.val > 0 ? '▲ Net Long' : '▼ Net Short';
+          showTip(`<b style="color:${PART_COLORS[s.part]}">${s.part}</b><br/>
+            ${d.date}<br/>Net Fut Idx: <b>${fmtN(d.val)}</b><br/>${dir}`, ev);
+        })
+        .on('mousemove', moveTip)
+        .on('mouseout',  hideTip);
+    });
+
+    // Legend
+    const lgnd = document.getElementById('trend-legend');
+    lgnd.innerHTML = '';
+    PARTS.forEach(p => {
+      lgnd.innerHTML += `<div class="legend-item">
+        <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}</div>`;
+    });
+  }
+
+  /* ── Chart 2: OI Breakdown — Long vs Short ── */
+  function drawBreakdown(oiData, latest) {
+    const el = document.getElementById('chart-breakdown');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 180;
+    const mg = { top: 8, right: 16, bottom: 20, left: 52 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el);
+    svg.selectAll('*').remove();
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const rows = PARTS.map(p => {
+      const rec = ((oiData[latest] || {})[p]) || {};
+      return { part: p, long: rec.total_long || 0, short: rec.total_short || 0 };
+    });
+
+    const xMax = d3.max(rows, r => Math.max(r.long, r.short)) * 1.05;
+    const yBand = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.28);
+    const xScale = d3.scaleLinear().domain([0, xMax]).range([0, iw]);
+
+    g.append('g').attr('class','axis')
+      .attr('transform', `translate(0,${ih})`)
+      .call(d3.axisBottom(xScale).ticks(4)
+        .tickFormat(v => v >= 1e6 ? d3.format('.1f')(v/1e6)+'M'
+                       : v >= 1e3 ? d3.format('.0f')(v/1e3)+'K' : v));
+
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+      .select('.domain').remove();
+
+    const barH = yBand.bandwidth() / 2 - 1;
+
+    rows.forEach(r => {
+      const y0 = yBand(r.part);
+      // Long bar
+      g.append('rect')
+        .attr('x', 0).attr('y', y0)
+        .attr('width', xScale(r.long)).attr('height', barH)
+        .attr('fill', PART_COLORS[r.part]).attr('opacity', 0.85)
+        .attr('rx', 2)
+        .on('mouseover', ev => showTip(
+          `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+           Long OI: <b>${fmtN(r.long)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+      // Short bar
+      g.append('rect')
+        .attr('x', 0).attr('y', y0 + barH + 2)
+        .attr('width', xScale(r.short)).attr('height', barH)
+        .attr('fill', PART_COLORS[r.part]).attr('opacity', 0.35)
+        .attr('rx', 2)
+        .on('mouseover', ev => showTip(
+          `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+           Short OI: <b>${fmtN(r.short)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    // Tiny legend
+    const lgEl = el.parentElement.querySelector('.chart-sub');
+    if (lgEl) lgEl.innerHTML =
+      `Total Long &amp; Short OI &nbsp;
+       <span style="opacity:.85">▬</span> Long &nbsp;
+       <span style="opacity:.35">▬</span> Short`;
+  }
+
+  /* ── Chart 3: Day-on-Day Net OI Change ── */
+  function drawDoD(dodData, pairs) {
+    if (!pairs || pairs.length === 0) return;
+    const [d0, d1] = pairs[pairs.length - 1];
+    const pairKey  = `${d0}|${d1}`;
+    const pairData = (dodData.data || {})[pairKey] || {};
+    document.getElementById('dod-sub').textContent = `${d0} → ${d1}`;
+
+    const el = document.getElementById('chart-dod');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 180;
+    const mg = { top: 8, right: 16, bottom: 20, left: 52 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el);
+    svg.selectAll('*').remove();
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const rows = PARTS.map(p => {
+      const rec = pairData[p] || {};
+      return { part: p, val: rec.d_net_total ?? 0 };
+    });
+
+    const absMax = Math.max(d3.max(rows, r => Math.abs(r.val)), 1);
+    const yBand  = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.3);
+    const xScale = d3.scaleLinear().domain([-absMax * 1.1, absMax * 1.1]).range([0, iw]);
+    const xMid   = xScale(0);
+
+    // Grid + zero
+    g.append('line')
+      .attr('x1', xMid).attr('x2', xMid)
+      .attr('y1', 0).attr('y2', ih)
+      .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+
+    g.append('g').attr('class','axis')
+      .attr('transform', `translate(0,${ih})`)
+      .call(d3.axisBottom(xScale).ticks(5)
+        .tickFormat(v => v >= 1e6 ? d3.format('.1f')(v/1e6)+'M'
+                       : v >= 1e3 ? d3.format('.0f')(v/1e3)+'K'
+                       : v <= -1e3 ? d3.format('.0f')(v/1e3)+'K' : v));
+
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+      .select('.domain').remove();
+
+    rows.forEach(r => {
+      const positive = r.val >= 0;
+      const barW  = Math.abs(xScale(r.val) - xMid);
+      const barX  = positive ? xMid : xMid - barW;
+      const color = positive ? '#10B981' : '#EF4444';
+
+      g.append('rect')
+        .attr('x', barX).attr('y', yBand(r.part))
+        .attr('width', Math.max(barW, 1)).attr('height', yBand.bandwidth())
+        .attr('fill', color).attr('opacity', 0.8).attr('rx', 2)
+        .on('mouseover', ev => showTip(
+          `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+           Δ Net Total OI: <b style="color:${color}">${fmtN(r.val)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+  }
+
+  /* ── Call chart functions ── */
+  const oiData = data.oi || {};
+  drawTrend(oiData.data || {}, dates);
+  drawBreakdown(oiData.data || {}, latest);
+  drawDoD(data.dod || {}, (data.dod || {}).pairs || []);
+
 
   console.log('[FAO Claude] Overview rendered. D3 version:', d3.version);
 }
