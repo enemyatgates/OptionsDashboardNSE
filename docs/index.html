@@ -688,27 +688,109 @@
   <!-- PCR Analysis -->
   <div class="tab-panel" id="tab-pcr">
     <div class="placeholder">
-      <div class="placeholder-icon">⇅</div>
-      <div class="placeholder-title">PCR Analysis</div>
-      <div class="placeholder-sub">
-        Participant-level PCR trends (OI + volume), aggregate chain PCR, net PCR and short-side PCR.
-        Charts built in Step 6.
-      </div>
-      <span class="placeholder-tag">Step 6</span>
+
+    <!-- PCR1: Index OI PCR Trend (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">Index OI PCR — Participant Trend</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">Put Long / Call Long</div>
     </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Index OI PCR per participant · reference bands: &lt;0.8 bullish · &gt;1.5 bearish</div>
+      <div class="legend" id="pcr-trend-legend"></div>
+      <svg class="chart-svg" id="chart-pcr-trend"></svg>
+    </div>
+
+    <!-- PCR2: Latest Session comparison + Short vs Long -->
+    <div class="section-hdr">
+      <div class="section-title">Latest Session PCR Analysis</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="pcr-latest-tag">—</div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">PCR by Type — All Participants</div>
+        <div class="chart-sub">Index · Stock · Combined OI PCR</div>
+        <svg class="chart-svg" id="chart-pcr-compare"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Long-side vs Short-side PCR</div>
+        <div class="chart-sub">Writer's PCR vs Buyer's PCR · divergence = signal</div>
+        <div class="legend" id="pcr-sides-legend"></div>
+        <svg class="chart-svg" id="chart-pcr-sides"></svg>
+      </div>
+    </div>
+
+    <!-- PCR3: Chain-level aggregate -->
+    <div class="section-hdr">
+      <div class="section-title">Chain-Level Aggregate PCR</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">market-wide · all strikes</div>
+    </div>
+    <div class="metrics-strip" id="chain-pcr-strip" style="margin-bottom:28px"></div>
+
+    <!-- PCR4: Volume PCR trend (conditional) -->
+    <div id="vol-pcr-section" style="display:none">
+      <div class="section-hdr">
+        <div class="section-title">Index Volume PCR — Participant Trend</div>
+        <div class="section-rule"></div>
+        <div class="section-tag">Put Buy / Call Buy</div>
+      </div>
+      <div class="chart-card wide" style="margin-bottom:12px">
+        <div class="chart-sub">Volume-based PCR per participant (dashed = volume, solid = OI for reference)</div>
+        <div class="legend" id="vol-pcr-legend"></div>
+        <svg class="chart-svg" id="chart-vol-pcr"></svg>
+      </div>
+    </div>
+
   </div>
 
   <!-- Net Bias & Efficiency -->
   <div class="tab-panel" id="tab-bias">
     <div class="placeholder">
-      <div class="placeholder-icon">⊿</div>
-      <div class="placeholder-title">Net Bias &amp; Efficiency</div>
-      <div class="placeholder-sub">
-        Net OI trends, OI-TV efficiency ratio, net conviction cross-check per participant.
-        Charts built in Step 7.
-      </div>
-      <span class="placeholder-tag">Step 7</span>
+
+    <!-- B1: OI-TV Efficiency (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">OI / TV Efficiency Ratio</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">OI held per unit volume · high = conviction · low = churn</div>
     </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Ratio of Open Interest to Trading Volume per instrument per participant</div>
+      <div class="legend" id="eff-legend"></div>
+      <svg class="chart-svg" id="chart-efficiency"></svg>
+    </div>
+
+    <!-- B2: Net Conviction + Net OI Composition -->
+    <div class="section-hdr">
+      <div class="section-title">Latest Session Analysis</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="bias-latest-tag">—</div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Net Conviction — OI vs Volume Direction</div>
+        <div class="chart-sub">Both sides same sign = strong signal · divergence = noise</div>
+        <svg class="chart-svg" id="chart-conviction"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Net OI Composition</div>
+        <div class="chart-sub">Futures vs Options split per participant</div>
+        <svg class="chart-svg" id="chart-composition"></svg>
+      </div>
+    </div>
+
+    <!-- B3: DoD Net OI Change (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">Day-on-Day Net OI Change — By Instrument</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="dod-instr-tag">—</div>
+    </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Delta in Net OI per instrument type vs previous session</div>
+      <svg class="chart-svg" id="chart-dod-instr"></svg>
+    </div>
+
   </div>
 
   <!-- Option Chain -->
@@ -1490,6 +1572,732 @@ function render(data) {
     drawTVTrend(tvData, dates);
   }
 
+
+  /* ════════════════════════════════════════════════════════
+     PCR ANALYSIS CHARTS
+  ════════════════════════════════════════════════════════ */
+
+  /* ── PCR1: Index OI PCR Trend ── */
+  function drawPCRTrend(oiData, dates) {
+    if (!dates || dates.length < 1) return;
+    const el = document.getElementById('chart-pcr-trend');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 230;
+    const mg = { top: 16, right: 20, bottom: 32, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const series = PARTS.map(p => ({
+      part: p,
+      values: dates.map(d => ({
+        date: d,
+        val: ((oiData[d] || {})[p] || {}).idx_oi_pcr ?? null,
+      })).filter(v => v.val != null),
+    }));
+
+    const allVals = series.flatMap(s => s.values.map(v => v.val));
+    const yMax = Math.max(d3.max(allVals) * 1.15, 2.0);
+    const yMin = Math.min(d3.min(allVals) * 0.85, 0.5);
+
+    const xSc = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([yMin, yMax]).range([ih, 0]);
+
+    // Reference bands
+    const bands = [
+      { y1: 0, y2: 0.8,  col: 'rgba(16,185,129,0.06)',  label: 'Bullish zone' },
+      { y1: 1.5, y2: yMax, col: 'rgba(239,68,68,0.06)', label: 'Bearish zone' },
+    ];
+    bands.forEach(b => {
+      if (b.y2 > yMin && b.y1 < yMax) {
+        g.append('rect')
+          .attr('x', 0).attr('width', iw)
+          .attr('y', ySc(Math.min(b.y2, yMax)))
+          .attr('height', Math.abs(ySc(Math.max(b.y1, yMin)) - ySc(Math.min(b.y2, yMax))))
+          .attr('fill', b.col);
+      }
+    });
+
+    // Reference lines
+    [{ v: 0.8, col:'#10B981', lbl:'0.8' },
+     { v: 1.0, col:'#94A3B8', lbl:'1.0' },
+     { v: 1.5, col:'#EF4444', lbl:'1.5' }].forEach(ref => {
+      if (ref.v >= yMin && ref.v <= yMax) {
+        g.append('line')
+          .attr('x1',0).attr('x2',iw).attr('y1',ySc(ref.v)).attr('y2',ySc(ref.v))
+          .attr('stroke', ref.col).attr('stroke-dasharray','4,3').attr('opacity',0.6);
+        g.append('text').attr('x', iw + 4).attr('y', ySc(ref.v) + 3)
+          .attr('fill', ref.col).attr('font-size','9px').attr('font-family','var(--mono)')
+          .text(ref.lbl);
+      }
+    });
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(6));
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(6).tickFormat(v => d3.format('.2f')(v)));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val))
+      .curve(d3.curveMonotoneX);
+
+    series.forEach(s => {
+      if (!s.values.length) return;
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', 2.5).attr('d', line);
+      g.selectAll(null).data(s.values).join('circle')
+        .attr('cx', d => xSc(d.date)).attr('cy', d => ySc(d.val))
+        .attr('r', 4.5).attr('fill', PART_COLORS[s.part])
+        .attr('stroke','var(--surface)').attr('stroke-width', 2)
+        .on('mouseover', (ev, d) => {
+          const sig = d.val < 0.8 ? '🟢 Bullish' : d.val > 1.5 ? '🔴 Bearish' : '🟡 Neutral';
+          showTip(`<b style="color:${PART_COLORS[s.part]}">${s.part}</b><br/>
+            ${d.date}<br/>Index OI PCR: <b>${d3.format('.3f')(d.val)}</b><br/>${sig}`, ev);
+        })
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    const lg = document.getElementById('pcr-trend-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('');
+  }
+
+  /* ── PCR2: PCR Comparison — latest session ── */
+  function drawPCRCompare(oiData, latest) {
+    const PCR_TYPES = [
+      { key: 'idx_oi_pcr',  label: 'Index',    col: 'var(--call)' },
+      { key: 'stk_oi_pcr',  label: 'Stock',    col: 'var(--put)'  },
+      { key: 'comb_oi_pcr', label: 'Combined', col: 'var(--green)' },
+    ];
+    const rows = [];
+    PARTS.forEach(p => {
+      const rec = ((oiData[latest] || {})[p]) || {};
+      PCR_TYPES.forEach(t => {
+        rows.push({ group: p, type: t.label, val: rec[t.key] ?? 0, col: t.col });
+      });
+    });
+
+    const el = document.getElementById('chart-pcr-compare');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 210;
+    const mg = { top: 8, right: 60, bottom: 28, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const yBand   = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.28);
+    const subBand = d3.scaleBand().domain(PCR_TYPES.map(t => t.label))
+                      .range([0, yBand.bandwidth()]).padding(0.1);
+    const xMax = Math.max(d3.max(rows, r => r.val) * 1.1, 2.0);
+    const xSc  = d3.scaleLinear().domain([0, xMax]).range([0, iw]);
+
+    // Reference lines
+    [{ v: 0.8, col:'#10B981' }, { v: 1.0, col:'#94A3B8' }, { v: 1.5, col:'#EF4444' }]
+      .forEach(ref => {
+        g.append('line')
+          .attr('x1',xSc(ref.v)).attr('x2',xSc(ref.v)).attr('y1',0).attr('y2',ih)
+          .attr('stroke', ref.col).attr('stroke-dasharray','3,3').attr('opacity',0.5);
+        g.append('text').attr('x',xSc(ref.v)+2).attr('y',-2)
+          .attr('fill',ref.col).attr('font-size','9px').attr('font-family','var(--mono)')
+          .text(ref.v.toFixed(1));
+      });
+
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).ticks(5).tickFormat(v => d3.format('.1f')(v)));
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+     .select('.domain').remove();
+
+    PARTS.forEach(p => {
+      const partRows = rows.filter(r => r.group === p);
+      partRows.forEach(r => {
+        g.append('rect')
+          .attr('x', 0)
+          .attr('y', yBand(p) + subBand(r.type))
+          .attr('width', Math.max(xSc(r.val), 2))
+          .attr('height', subBand.bandwidth())
+          .attr('fill', r.col).attr('opacity', 0.75).attr('rx', 2)
+          .on('mouseover', ev => {
+            const sig = r.val < 0.8 ? '🟢 Bullish' : r.val > 1.5 ? '🔴 Bearish' : '🟡 Neutral';
+            showTip(`<b>${p}</b> · ${r.type} PCR<br/>
+              <b>${d3.format('.3f')(r.val)}</b> ${sig}`, ev);
+          })
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+      });
+    });
+
+    // Legend (right side)
+    PCR_TYPES.forEach((t, i) => {
+      svg.append('rect')
+        .attr('x', W - mg.right + 6).attr('y', mg.top + i * 18)
+        .attr('width', 10).attr('height', 10).attr('rx', 2)
+        .attr('fill', t.col).attr('opacity', 0.75);
+      svg.append('text')
+        .attr('x', W - mg.right + 20).attr('y', mg.top + i * 18 + 9)
+        .attr('fill','var(--muted)').attr('font-size','10px')
+        .attr('font-family','var(--mono)').text(t.label);
+    });
+  }
+
+  /* ── PCR3: Long-side vs Short-side PCR ── */
+  function drawPCRSides(oiData, dates) {
+    if (!dates || dates.length < 1) return;
+    const el = document.getElementById('chart-pcr-sides');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 210;
+    const mg = { top: 16, right: 20, bottom: 32, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    // Two series per participant: idx_oi_pcr (long-side) + short_pcr (short-side)
+    const seriesAll = [];
+    PARTS.forEach(p => {
+      seriesAll.push({
+        part: p, side: 'long',
+        dash: null,
+        values: dates.map(d => ({
+          date: d, val: ((oiData[d] || {})[p] || {}).idx_oi_pcr ?? null
+        })).filter(v => v.val != null),
+      });
+      seriesAll.push({
+        part: p, side: 'short',
+        dash: '5,3',
+        values: dates.map(d => ({
+          date: d, val: ((oiData[d] || {})[p] || {}).short_pcr ?? null
+        })).filter(v => v.val != null),
+      });
+    });
+
+    const allVals = seriesAll.flatMap(s => s.values.map(v => v.val)).filter(v => v != null);
+    const yMax = Math.max(d3.max(allVals) * 1.1, 2.0);
+    const yMin = Math.min(d3.min(allVals) * 0.9, 0.5);
+
+    const xSc = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([yMin, yMax]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(1)).attr('y2',ySc(1))
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(v => d3.format('.2f')(v)));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val)).curve(d3.curveMonotoneX);
+
+    seriesAll.forEach(s => {
+      if (!s.values.length) return;
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', s.side === 'long' ? 2 : 1.5)
+        .attr('stroke-dasharray', s.dash || null)
+        .attr('opacity', s.side === 'long' ? 1 : 0.55)
+        .attr('d', line);
+      g.selectAll(null).data(s.values).join('circle')
+        .attr('cx', d => xSc(d.date)).attr('cy', d => ySc(d.val))
+        .attr('r', s.side === 'long' ? 3.5 : 2.5)
+        .attr('fill', PART_COLORS[s.part])
+        .attr('opacity', s.side === 'long' ? 1 : 0.55)
+        .attr('stroke','var(--surface)').attr('stroke-width', 1.5)
+        .on('mouseover', (ev, d) => showTip(
+          `<b style="color:${PART_COLORS[s.part]}">${s.part}</b> · ${s.side === 'long' ? 'Long-side' : 'Short-side'}<br/>
+           ${d.date}<br/>PCR: <b>${d3.format('.3f')(d.val)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    const lg = document.getElementById('pcr-sides-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('') +
+      `<div class="legend-item" style="margin-left:8px;padding-left:8px;border-left:1px solid var(--border)">
+         <div class="legend-line" style="background:var(--muted)"></div>solid = long-side
+       </div>
+       <div class="legend-item">
+         <div class="legend-line" style="background:var(--muted);opacity:.5;
+           border-bottom:2px dashed var(--muted);height:0"></div>dashed = short-side
+       </div>`;
+  }
+
+  /* ── PCR4: Chain-level aggregate PCR cards ── */
+  function drawChainPCR(chain) {
+    const strip = document.getElementById('chain-pcr-strip');
+    if (!chain || !strip) return;
+    const cards = [
+      { val: chain.oi_pcr,         lbl: 'OI PCR (Chain)',
+        sub: 'Put OI / Call OI · all strikes', cls: 'c-green' },
+      { val: chain.vol_pcr,        lbl: 'Volume PCR (Chain)',
+        sub: 'Put Vol / Call Vol · all strikes', cls: 'c-amber' },
+      { val: chain.total_call_oi,  lbl: 'Total Call OI',
+        sub: chain.date || '—', cls: 'c-call', fmt: 'N' },
+      { val: chain.total_put_oi,   lbl: 'Total Put OI',
+        sub: chain.date || '—', cls: 'c-put', fmt: 'N' },
+    ];
+    strip.innerHTML = cards.map(c => `
+      <div class="metric-card">
+        <div class="metric-val ${c.cls}">${c.fmt === 'N' ? fmtN(c.val) : (c.val != null ? d3.format('.3f')(c.val) : '—')}</div>
+        <div class="metric-lbl">${c.lbl}</div>
+        <div class="metric-sub">${c.sub}</div>
+      </div>`).join('');
+  }
+
+  /* ── PCR5: Volume PCR Trend (conditional) ── */
+  function drawVolPCRTrend(oiData, tvData, dates) {
+    const tvDates = dates.filter(d => tvData[d]);
+    if (!tvDates.length) return;
+    document.getElementById('vol-pcr-section').style.display = 'block';
+
+    const el = document.getElementById('chart-vol-pcr');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 200;
+    const mg = { top: 16, right: 20, bottom: 32, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    // OI PCR (solid reference) + Volume PCR (dashed)
+    const seriesAll = [];
+    PARTS.forEach(p => {
+      seriesAll.push({
+        part: p, type: 'OI', dash: null,
+        values: dates.map(d => ({
+          date: d, val: ((oiData[d] || {})[p] || {}).idx_oi_pcr ?? null
+        })).filter(v => v.val != null),
+      });
+      seriesAll.push({
+        part: p, type: 'Vol', dash: '5,3',
+        values: tvDates.map(d => ({
+          date: d, val: ((tvData[d] || {})[p] || {}).idx_oi_pcr ?? null
+        })).filter(v => v.val != null),
+      });
+    });
+
+    const allVals = seriesAll.flatMap(s => s.values.map(v => v.val)).filter(v => v != null);
+    const yMax = Math.max(d3.max(allVals) * 1.1, 2.0);
+    const yMin = Math.min(d3.min(allVals) * 0.9, 0.5);
+
+    const xSc = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([yMin, yMax]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    [0.8, 1.0, 1.5].forEach(ref => {
+      if (ref >= yMin && ref <= yMax) {
+        g.append('line')
+          .attr('x1',0).attr('x2',iw).attr('y1',ySc(ref)).attr('y2',ySc(ref))
+          .attr('stroke', ref===1.0?'#94A3B8':ref<1?'#10B981':'#EF4444')
+          .attr('stroke-dasharray','3,4').attr('opacity',0.45);
+      }
+    });
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(v => d3.format('.2f')(v)));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val)).curve(d3.curveMonotoneX);
+
+    seriesAll.forEach(s => {
+      if (!s.values.length) return;
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', s.type === 'OI' ? 1.5 : 2)
+        .attr('stroke-dasharray', s.dash || null)
+        .attr('opacity', s.type === 'OI' ? 0.4 : 1)
+        .attr('d', line);
+    });
+
+    const lg = document.getElementById('vol-pcr-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('') +
+      `<div class="legend-item" style="margin-left:8px;padding-left:8px;border-left:1px solid var(--border)">
+         <div class="legend-line" style="background:var(--muted)"></div>solid=OI (ref)
+       </div>
+       <div class="legend-item">
+         <div class="legend-line" style="background:var(--muted)"></div>dashed=Volume
+       </div>`;
+  }
+
+  /* ── Wire PCR tab ── */
+  function renderPCRTab(data) {
+    const oiData = (data.oi || {}).data || {};
+    const tvData = (data.tv || {}).data || {};
+    const dates  = (data.oi || {}).dates || [];
+    const latest = dates[dates.length - 1];
+    if (!latest) return;
+
+    document.getElementById('pcr-latest-tag').textContent = latest;
+    drawPCRTrend(oiData, dates);
+    drawPCRCompare(oiData, latest);
+    drawPCRSides(oiData, dates);
+    drawChainPCR(data.chain || null);
+    drawVolPCRTrend(oiData, tvData, dates);
+  }
+
+
+  /* ════════════════════════════════════════════════════════
+     NET BIAS & EFFICIENCY CHARTS
+  ════════════════════════════════════════════════════════ */
+
+  /* ── B1: OI-TV Efficiency Ratio ── */
+  function drawEfficiency(effData, dates) {
+    const effDates = dates.filter(d => effData[d]);
+    if (!effDates.length) {
+      document.getElementById('chart-efficiency').parentElement.querySelector('.chart-sub')
+        .textContent = 'TV data not available — efficiency ratios require trading volume input.';
+      return;
+    }
+    const latest = effDates[effDates.length - 1];
+
+    const INSTRS = [
+      { key: 'oi_tv_fut_idx',  label: 'Fut Index' },
+      { key: 'oi_tv_fut_stk',  label: 'Fut Stock'  },
+      { key: 'oi_tv_idx_call', label: 'Idx Call'   },
+      { key: 'oi_tv_idx_put',  label: 'Idx Put'    },
+      { key: 'oi_tv_total',    label: 'Total'       },
+    ];
+
+    const rows = [];
+    PARTS.forEach(p => {
+      const rec = (effData[latest] || {})[p] || {};
+      INSTRS.forEach(ins => {
+        rows.push({ part: p, instr: ins.label, val: rec[ins.key] ?? 0 });
+      });
+    });
+
+    const el = document.getElementById('chart-efficiency');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 210;
+    const mg = { top: 8, right: 16, bottom: 32, left: 60 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const instrLabels = INSTRS.map(i => i.label);
+    const xBand  = d3.scaleBand().domain(instrLabels).range([0, iw]).padding(0.22);
+    const subBand= d3.scaleBand().domain(PARTS).range([0, xBand.bandwidth()]).padding(0.08);
+    const yMax   = Math.max(d3.max(rows, r => r.val) * 1.1, 1);
+    const ySc    = d3.scaleLinear().domain([0, yMax]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    // Reference line at 1.0
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(1)).attr('y2',ySc(1))
+     .attr('stroke','var(--amber)').attr('stroke-dasharray','4,3').attr('opacity',0.6);
+    g.append('text').attr('x',iw+3).attr('y',ySc(1)+3)
+     .attr('fill','var(--amber)').attr('font-size','9px').attr('font-family','var(--mono)').text('1.0');
+
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xBand).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(v => d3.format('.1f')(v)));
+
+    instrLabels.forEach(instr => {
+      PARTS.forEach(p => {
+        const row = rows.find(r => r.part === p && r.instr === instr);
+        const val = row ? row.val : 0;
+        g.append('rect')
+          .attr('x', xBand(instr) + subBand(p))
+          .attr('y', ySc(val))
+          .attr('width', subBand.bandwidth())
+          .attr('height', ih - ySc(val))
+          .attr('fill', PART_COLORS[p]).attr('opacity', 0.8).attr('rx', 2)
+          .on('mouseover', ev => showTip(
+            `<b style="color:${PART_COLORS[p]}">${p}</b> · ${instr}<br/>
+             OI/TV Ratio: <b>${d3.format('.2f')(val)}</b><br/>
+             ${val > 1 ? '▲ Holding positions' : '▼ High turnover'}`, ev))
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+      });
+    });
+
+    const lg = document.getElementById('eff-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-dot" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('');
+  }
+
+  /* ── B2a: Net Conviction — OI vs Volume Direction ── */
+  function drawConviction(oiData, effData, dates, latest) {
+    const effDates = dates.filter(d => effData[d]);
+    const el = document.getElementById('chart-conviction');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 200;
+    const mg = { top: 16, right: 16, bottom: 28, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    // For each participant: net_oi_fut_idx (OI signal) vs net_tv_fut_idx (Volume signal)
+    const hasEff = effDates.includes(latest);
+    const effLatest = hasEff ? (effData[latest] || {}) : {};
+
+    const rows = PARTS.map(p => {
+      const oiRec  = ((oiData[latest] || {})[p]) || {};
+      const effRec = (effLatest[p]) || {};
+      return {
+        part: p,
+        oi_net:  oiRec.net_fut_idx  ?? 0,
+        tv_net:  effRec.net_tv_fut_idx ?? null,
+      };
+    });
+
+    // Grouped bar: OI net (solid) + TV net (dimmed) per participant
+    const absMax = Math.max(
+      d3.max(rows, r => Math.abs(r.oi_net)),
+      d3.max(rows, r => Math.abs(r.tv_net || 0)),
+      1
+    );
+    const yBand  = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.28);
+    const xSc    = d3.scaleLinear().domain([-absMax*1.1, absMax*1.1]).range([0, iw]);
+    const xMid   = xSc(0);
+
+    g.append('line')
+     .attr('x1',xMid).attr('x2',xMid).attr('y1',0).attr('y2',ih)
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).ticks(5).tickFormat(fmtAxis));
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+     .select('.domain').remove();
+
+    const barH = yBand.bandwidth() / 2 - 1;
+    rows.forEach(r => {
+      const y0 = yBand(r.part);
+      // OI bar
+      const oiW = Math.abs(xSc(r.oi_net) - xMid);
+      g.append('rect')
+        .attr('x', r.oi_net >= 0 ? xMid : xMid - oiW)
+        .attr('y', y0).attr('width', Math.max(oiW,1)).attr('height', barH)
+        .attr('fill', r.oi_net >= 0 ? '#10B981' : '#EF4444').attr('opacity', 0.85).attr('rx',2)
+        .on('mouseover', ev => showTip(
+          `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+           Net Fut Idx OI: <b>${fmtN(r.oi_net)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+      // TV bar (if available)
+      if (r.tv_net != null) {
+        const tvW = Math.abs(xSc(r.tv_net) - xMid);
+        g.append('rect')
+          .attr('x', r.tv_net >= 0 ? xMid : xMid - tvW)
+          .attr('y', y0 + barH + 2).attr('width', Math.max(tvW,1)).attr('height', barH)
+          .attr('fill', r.tv_net >= 0 ? '#10B981' : '#EF4444').attr('opacity', 0.4).attr('rx',2)
+          .on('mouseover', ev => showTip(
+            `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+             Net Fut Idx Vol: <b>${fmtN(r.tv_net)}</b>`, ev))
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+      }
+    });
+
+    // Labels
+    g.append('text').attr('x', xMid/2).attr('y', -4)
+     .attr('fill','var(--faint)').attr('font-size','9px')
+     .attr('text-anchor','middle').attr('font-family','var(--mono)').text('← Net Short');
+    g.append('text').attr('x', xMid + (iw-xMid)/2).attr('y', -4)
+     .attr('fill','var(--faint)').attr('font-size','9px')
+     .attr('text-anchor','middle').attr('font-family','var(--mono)').text('Net Long →');
+  }
+
+  /* ── B2b: Net OI Composition ── */
+  function drawComposition(oiData, latest) {
+    const el = document.getElementById('chart-composition');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 200;
+    const mg = { top: 8, right: 80, bottom: 28, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const SEGS = [
+      { key: 'net_futures', label: 'Futures', col: 'var(--call)' },
+      { key: 'net_options', label: 'Options', col: 'var(--put)'  },
+    ];
+
+    const rows = PARTS.map(p => {
+      const rec = ((oiData[latest] || {})[p]) || {};
+      return { part: p, net_futures: rec.net_futures||0, net_options: rec.net_options||0 };
+    });
+
+    const absMax = Math.max(
+      d3.max(rows, r => Math.abs(r.net_futures) + Math.abs(r.net_options)), 1
+    );
+    const yBand = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.28);
+    const xSc   = d3.scaleLinear().domain([-absMax*1.1, absMax*1.1]).range([0, iw]);
+    const xMid  = xSc(0);
+
+    g.append('line')
+     .attr('x1',xMid).attr('x2',xMid).attr('y1',0).attr('y2',ih)
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).ticks(4).tickFormat(fmtAxis));
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+     .select('.domain').remove();
+
+    rows.forEach(r => {
+      let xCursor = xMid;
+      SEGS.forEach(seg => {
+        const val = r[seg.key] || 0;
+        const w   = Math.abs(xSc(val) - xSc(0));
+        const x   = val >= 0 ? xCursor : xCursor - w;
+        g.append('rect')
+          .attr('x', x).attr('y', yBand(r.part))
+          .attr('width', Math.max(w,1)).attr('height', yBand.bandwidth())
+          .attr('fill', seg.col).attr('opacity', 0.8).attr('rx', 2)
+          .on('mouseover', ev => showTip(
+            `<b style="color:${PART_COLORS[r.part]}">${r.part}</b> · ${seg.label}<br/>
+             Net OI: <b>${fmtN(val)}</b>`, ev))
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+        xCursor = val >= 0 ? xCursor + w : xCursor - w;
+      });
+    });
+
+    // Legend
+    SEGS.forEach((seg, i) => {
+      svg.append('rect')
+        .attr('x', W - mg.right + 6).attr('y', mg.top + i*18)
+        .attr('width',10).attr('height',10).attr('rx',2)
+        .attr('fill', seg.col).attr('opacity', 0.8);
+      svg.append('text')
+        .attr('x', W - mg.right + 20).attr('y', mg.top + i*18 + 9)
+        .attr('fill','var(--muted)').attr('font-size','10px')
+        .attr('font-family','var(--mono)').text(seg.label);
+    });
+  }
+
+  /* ── B3: DoD Net OI Change — By Instrument ── */
+  function drawDoDInstrument(dodData) {
+    const pairs = (dodData.pairs || []);
+    if (!pairs.length) return;
+    const [d0, d1] = pairs[pairs.length - 1];
+    const pairKey  = `${d0}|${d1}`;
+    const pairData = (dodData.data || {})[pairKey] || {};
+
+    document.getElementById('dod-instr-tag').textContent = `${d0} → ${d1}`;
+
+    const INSTRS = [
+      { key: 'd_net_fut_idx',  label: 'Fut Index'  },
+      { key: 'd_net_fut_stk',  label: 'Fut Stock'  },
+      { key: 'd_net_idx_call', label: 'Idx Call'   },
+      { key: 'd_net_idx_put',  label: 'Idx Put'    },
+      { key: 'd_net_stk_call', label: 'Stk Call'   },
+      { key: 'd_net_stk_put',  label: 'Stk Put'    },
+    ];
+
+    const rows = [];
+    PARTS.forEach(p => {
+      const rec = pairData[p] || {};
+      INSTRS.forEach(ins => {
+        rows.push({ part: p, instr: ins.label, val: rec[ins.key] ?? 0 });
+      });
+    });
+
+    const el = document.getElementById('chart-dod-instr');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 230;
+    const mg = { top: 8, right: 16, bottom: 40, left: 60 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const instrLabels = INSTRS.map(i => i.label);
+    const xBand  = d3.scaleBand().domain(instrLabels).range([0, iw]).padding(0.22);
+    const subBand= d3.scaleBand().domain(PARTS).range([0, xBand.bandwidth()]).padding(0.08);
+    const absMax = Math.max(d3.max(rows, r => Math.abs(r.val)), 1);
+    const ySc    = d3.scaleLinear().domain([-absMax*1.15, absMax*1.15]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(0)).attr('y2',ySc(0))
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xBand).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(fmtAxis));
+
+    instrLabels.forEach(instr => {
+      PARTS.forEach(p => {
+        const row = rows.find(r => r.part === p && r.instr === instr);
+        const val = row ? row.val : 0;
+        const pos = val >= 0;
+        const barH = Math.abs(ySc(val) - ySc(0));
+        g.append('rect')
+          .attr('x', xBand(instr) + subBand(p))
+          .attr('y', pos ? ySc(val) : ySc(0))
+          .attr('width', subBand.bandwidth())
+          .attr('height', Math.max(barH, 1))
+          .attr('fill', PART_COLORS[p])
+          .attr('opacity', pos ? 0.85 : 0.45)
+          .attr('rx', 2)
+          .on('mouseover', ev => showTip(
+            `<b style="color:${PART_COLORS[p]}">${p}</b> · ${instr}<br/>
+             Δ Net OI: <b>${fmtN(val)}</b><br/>
+             ${pos ? '▲ OI added net long' : '▼ OI added net short'}`, ev))
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+      });
+    });
+
+    // Participant legend below x axis
+    const lgY = H - mg.bottom + 18;
+    PARTS.forEach((p, i) => {
+      const lx = mg.left + i * 100;
+      svg.append('rect').attr('x',lx).attr('y',lgY)
+        .attr('width',10).attr('height',10).attr('rx',2)
+        .attr('fill',PART_COLORS[p]).attr('opacity',0.85);
+      svg.append('text').attr('x',lx+14).attr('y',lgY+9)
+        .attr('fill','var(--muted)').attr('font-size','11px')
+        .attr('font-family','var(--mono)').text(p);
+    });
+  }
+
+  /* ── Wire Bias tab ── */
+  function renderBiasTab(data) {
+    const oiData  = (data.oi  || {}).data || {};
+    const effData = (data.efficiency || {}).data || {};
+    const dates   = (data.oi  || {}).dates || [];
+    const latest  = dates[dates.length - 1];
+    if (!latest) return;
+
+    document.getElementById('bias-latest-tag').textContent = latest;
+    drawEfficiency(effData, dates);
+    drawConviction(oiData, effData, dates, latest);
+    drawComposition(oiData, latest);
+    drawDoDInstrument(data.dod || {});
+  }
+
   /* ── Call chart functions ── */
   const oiData = data.oi || {};
   drawTrend(oiData.data || {}, dates);
@@ -1498,6 +2306,8 @@ function render(data) {
 
 
   renderParticipantTab(data);
+  renderPCRTab(data);
+  renderBiasTab(data);
 
   console.log('[FAO Claude] Overview rendered. D3 version:', d3.version);
 }
