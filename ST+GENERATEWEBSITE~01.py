@@ -697,14 +697,64 @@ HTML = r"""<!DOCTYPE html>
   <!-- Participant OI & TV -->
   <div class="tab-panel" id="tab-participant">
     <div class="placeholder">
-      <div class="placeholder-icon">⊞</div>
-      <div class="placeholder-title">Participant OI &amp; TV</div>
-      <div class="placeholder-sub">
-        Long/Short OI, Net OI, L/S ratios and market share per participant across all sessions.
-        Charts built in Step 5.
-      </div>
-      <span class="placeholder-tag">Step 5</span>
+
+    <!-- P1: Net Total OI Trend (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">Net Total OI — Participant Trend</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">all sessions</div>
     </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Net Total OI (Long − Short) per participant across sessions</div>
+      <div class="legend" id="part-trend-legend"></div>
+      <svg class="chart-svg" id="chart-part-trend"></svg>
+    </div>
+
+    <!-- P2: Long vs Short + L/S Ratio -->
+    <div class="section-hdr">
+      <div class="section-title">Latest Session Detail</div>
+      <div class="section-rule"></div>
+      <div class="section-tag" id="part-latest-tag">—</div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Long vs Short OI</div>
+        <div class="chart-sub">Total Long (solid) &amp; Short (dimmed) per participant</div>
+        <svg class="chart-svg" id="chart-part-ls"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">L/S Ratio Trend</div>
+        <div class="chart-sub">Total Long / Total Short across sessions</div>
+        <div class="legend" id="ls-ratio-legend"></div>
+        <svg class="chart-svg" id="chart-ls-ratio"></svg>
+      </div>
+    </div>
+
+    <!-- P3: Instrument breakdown (wide) -->
+    <div class="section-hdr">
+      <div class="section-title">Net OI by Instrument — Latest Session</div>
+      <div class="section-rule"></div>
+      <div class="section-tag">Fut Idx · Fut Stk · Idx Calls · Idx Puts · Stk Calls · Stk Puts</div>
+    </div>
+    <div class="chart-card wide" style="margin-bottom:12px">
+      <div class="chart-sub">Net OI per instrument type per participant (green = net long, red = net short)</div>
+      <svg class="chart-svg" id="chart-instrument"></svg>
+    </div>
+
+    <!-- P4: TV trend (conditional) -->
+    <div id="tv-section" style="display:none">
+      <div class="section-hdr">
+        <div class="section-title">Net Trading Volume — Participant Trend</div>
+        <div class="section-rule"></div>
+        <div class="section-tag">all sessions</div>
+      </div>
+      <div class="chart-card wide" style="margin-bottom:12px">
+        <div class="chart-sub">Net Volume (Buy − Sell) per participant across sessions</div>
+        <div class="legend" id="tv-trend-legend"></div>
+        <svg class="chart-svg" id="chart-tv-trend"></svg>
+      </div>
+    </div>
+
   </div>
 
   <!-- PCR Analysis -->
@@ -1181,12 +1231,345 @@ function render(data) {
     });
   }
 
+
+  /* ════════════════════════════════════════════════════════
+     PARTICIPANT OI & TV CHARTS
+  ════════════════════════════════════════════════════════ */
+
+  /* Shared axis tick formatter */
+  const fmtAxis = v => {
+    const a = Math.abs(v);
+    return a >= 1e6 ? d3.format('.1f')(v/1e6)+'M'
+         : a >= 1e3 ? d3.format('.0f')(v/1e3)+'K'
+         : String(v);
+  };
+
+  /* ── P1: Net Total OI Trend ── */
+  function drawPartTrend(oiData, dates) {
+    if (!dates || dates.length < 1) return;
+    const el = document.getElementById('chart-part-trend');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 230;
+    const mg = { top: 12, right: 20, bottom: 32, left: 80 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const series = PARTS.map(p => ({
+      part: p,
+      values: dates.map(d => ({
+        date: d,
+        val: ((oiData[d] || {})[p] || {}).net_total ?? 0,
+      })),
+    }));
+    const allVals = series.flatMap(s => s.values.map(v => v.val));
+    const yMax = Math.max(Math.abs(d3.max(allVals)), Math.abs(d3.min(allVals)), 1);
+
+    const xSc = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([-yMax*1.12, yMax*1.12]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(0)).attr('y2',ySc(0))
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(fmtAxis));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val))
+      .curve(d3.curveMonotoneX);
+
+    series.forEach(s => {
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', 2.5).attr('d', line);
+      g.selectAll(null).data(s.values).join('circle')
+        .attr('cx', d => xSc(d.date)).attr('cy', d => ySc(d.val))
+        .attr('r', 4.5).attr('fill', PART_COLORS[s.part])
+        .attr('stroke','var(--surface)').attr('stroke-width', 2)
+        .style('cursor','pointer')
+        .on('mouseover', (ev, d) => showTip(
+          `<b style="color:${PART_COLORS[s.part]}">${s.part}</b><br/>
+           ${d.date}<br/>Net Total OI: <b>${fmtN(d.val)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    const lg = document.getElementById('part-trend-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('');
+  }
+
+  /* ── P2a: Long vs Short OI — latest session ── */
+  function drawPartLS(oiData, latest) {
+    const el = document.getElementById('chart-part-ls');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 190;
+    const mg = { top: 8, right: 16, bottom: 28, left: 56 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const rows = PARTS.map(p => {
+      const r = ((oiData[latest] || {})[p]) || {};
+      return { part: p, long: r.total_long || 0, short: r.total_short || 0 };
+    });
+    const xMax = d3.max(rows, r => Math.max(r.long, r.short)) * 1.05;
+    const yBand = d3.scaleBand().domain(PARTS).range([0, ih]).padding(0.26);
+    const xSc   = d3.scaleLinear().domain([0, xMax]).range([0, iw]);
+    const barH  = yBand.bandwidth() / 2 - 1;
+
+    g.append('g').attr('class','grid')
+     .attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(-ih).tickFormat('').ticks(4));
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).ticks(4).tickFormat(fmtAxis));
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+     .select('.domain').remove();
+
+    rows.forEach(r => {
+      const y0 = yBand(r.part);
+      [[r.long, 0.9, 'Long'], [r.short, 0.35, 'Short']].forEach(([val, op, lbl], i) => {
+        g.append('rect')
+          .attr('x', 0).attr('y', y0 + i * (barH + 2))
+          .attr('width', xSc(val)).attr('height', barH)
+          .attr('fill', PART_COLORS[r.part]).attr('opacity', op).attr('rx', 2)
+          .on('mouseover', ev => showTip(
+            `<b style="color:${PART_COLORS[r.part]}">${r.part}</b><br/>
+             ${lbl} OI: <b>${fmtN(val)}</b>`, ev))
+          .on('mousemove', moveTip).on('mouseout', hideTip);
+      });
+    });
+  }
+
+  /* ── P2b: L/S Ratio Trend ── */
+  function drawLSRatio(oiData, dates) {
+    if (!dates || dates.length < 1) return;
+    const el = document.getElementById('chart-ls-ratio');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 190;
+    const mg = { top: 8, right: 20, bottom: 28, left: 52 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const series = PARTS.map(p => ({
+      part: p,
+      values: dates.map(d => ({
+        date: d,
+        val: ((oiData[d] || {})[p] || {}).ls_ratio ?? 1,
+      })),
+    }));
+    const allVals = series.flatMap(s => s.values.map(v => v.val)).filter(v => v != null);
+    const [vMin, vMax] = [Math.min(...allVals) * 0.95, Math.max(...allVals) * 1.05];
+
+    const xSc = d3.scalePoint().domain(dates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([Math.min(vMin, 0.8), Math.max(vMax, 1.2)]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    // parity line at 1.0
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(1)).attr('y2',ySc(1))
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(v => d3.format('.2f')(v)));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val))
+      .curve(d3.curveMonotoneX);
+
+    series.forEach(s => {
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', 2).attr('d', line);
+      g.selectAll(null).data(s.values).join('circle')
+        .attr('cx', d => xSc(d.date)).attr('cy', d => ySc(d.val))
+        .attr('r', 3.5).attr('fill', PART_COLORS[s.part])
+        .attr('stroke','var(--surface)').attr('stroke-width', 1.5)
+        .on('mouseover', (ev, d) => showTip(
+          `<b style="color:${PART_COLORS[s.part]}">${s.part}</b><br/>
+           ${d.date}<br/>L/S Ratio: <b>${d3.format('.3f')(d.val)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    const lg = document.getElementById('ls-ratio-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]}"></div>${p}
+       </div>`).join('');
+  }
+
+  /* ── P3: Instrument Breakdown — latest session ── */
+  function drawInstrument(oiData, latest) {
+    const INSTRUMENTS = [
+      { key: 'net_fut_idx',   label: 'Fut Index' },
+      { key: 'net_fut_stk',   label: 'Fut Stock'  },
+      { key: 'net_idx_call',  label: 'Idx Call'   },
+      { key: 'net_idx_put',   label: 'Idx Put'    },
+      { key: 'net_stk_call',  label: 'Stk Call'   },
+      { key: 'net_stk_put',   label: 'Stk Put'    },
+    ];
+    const rows = [];
+    PARTS.forEach(p => {
+      const rec = ((oiData[latest] || {})[p]) || {};
+      INSTRUMENTS.forEach(ins => {
+        rows.push({ part: p, label: `${p} · ${ins.label}`, val: rec[ins.key] ?? 0 });
+      });
+    });
+
+    const el = document.getElementById('chart-instrument');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = Math.max(rows.length * 22 + 40, 220);
+    const mg = { top: 8, right: 20, bottom: 28, left: 110 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const absMax = Math.max(d3.max(rows, r => Math.abs(r.val)), 1);
+    const yBand  = d3.scaleBand().domain(rows.map(r => r.label)).range([0, ih]).padding(0.18);
+    const xSc    = d3.scaleLinear().domain([-absMax*1.1, absMax*1.1]).range([0, iw]);
+    const xMid   = xSc(0);
+
+    g.append('g').attr('class','grid')
+     .attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(-ih).tickFormat('').ticks(6));
+    g.append('line')
+     .attr('x1',xMid).attr('x2',xMid).attr('y1',0).attr('y2',ih)
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).ticks(6).tickFormat(fmtAxis));
+    g.append('g').attr('class','axis').call(d3.axisLeft(yBand).tickSize(0))
+     .selectAll('text').style('font-size','9px');
+    d3.select(el).select('.axis:last-of-type .domain').remove();
+
+    rows.forEach(r => {
+      const pos  = r.val >= 0;
+      const barW = Math.max(Math.abs(xSc(r.val) - xMid), 1);
+      const barX = pos ? xMid : xMid - barW;
+      const col  = PART_COLORS[r.part];
+
+      g.append('rect')
+        .attr('x', barX).attr('y', yBand(r.label))
+        .attr('width', barW).attr('height', yBand.bandwidth())
+        .attr('fill', col).attr('opacity', pos ? 0.8 : 0.4).attr('rx', 2)
+        .on('mouseover', ev => showTip(
+          `<b style="color:${col}">${r.label}</b><br/>
+           Net OI: <b>${fmtN(r.val)}</b><br/>
+           ${pos ? '▲ Net Long' : '▼ Net Short'}`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+  }
+
+  /* ── P4: Net TV Trend (conditional) ── */
+  function drawTVTrend(tvData, dates) {
+    const tvDates = dates.filter(d => tvData[d]);
+    if (!tvDates.length) return;
+    document.getElementById('tv-section').style.display = 'block';
+
+    const el = document.getElementById('chart-tv-trend');
+    const W  = el.parentElement.clientWidth - 32;
+    const H  = 200;
+    const mg = { top: 12, right: 20, bottom: 32, left: 80 };
+    const iw = W - mg.left - mg.right;
+    const ih = H - mg.top  - mg.bottom;
+
+    el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const svg = d3.select(el); svg.selectAll('*').remove();
+    const g   = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    const series = PARTS.map(p => ({
+      part: p,
+      values: tvDates.map(d => ({
+        date: d,
+        val: ((tvData[d] || {})[p] || {}).net_total ?? 0,
+      })),
+    }));
+    const allVals = series.flatMap(s => s.values.map(v => v.val));
+    const yMax = Math.max(Math.abs(d3.max(allVals)), Math.abs(d3.min(allVals)), 1);
+
+    const xSc = d3.scalePoint().domain(tvDates).range([0, iw]).padding(0.1);
+    const ySc = d3.scaleLinear().domain([-yMax*1.12, yMax*1.12]).range([ih, 0]);
+
+    g.append('g').attr('class','grid')
+     .call(d3.axisLeft(ySc).tickSize(-iw).tickFormat('').ticks(5));
+    g.append('line')
+     .attr('x1',0).attr('x2',iw).attr('y1',ySc(0)).attr('y2',ySc(0))
+     .attr('stroke','var(--border2)').attr('stroke-dasharray','4,3');
+    g.append('g').attr('class','axis').attr('transform',`translate(0,${ih})`)
+     .call(d3.axisBottom(xSc).tickSize(3));
+    g.append('g').attr('class','axis')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(fmtAxis));
+
+    const line = d3.line()
+      .x(d => xSc(d.date)).y(d => ySc(d.val))
+      .curve(d3.curveMonotoneX);
+
+    series.forEach(s => {
+      g.append('path').datum(s.values)
+        .attr('fill','none').attr('stroke', PART_COLORS[s.part])
+        .attr('stroke-width', 2).attr('stroke-dasharray','5,3')
+        .attr('d', line);
+      g.selectAll(null).data(s.values).join('circle')
+        .attr('cx', d => xSc(d.date)).attr('cy', d => ySc(d.val))
+        .attr('r', 3.5).attr('fill', PART_COLORS[s.part])
+        .attr('stroke','var(--surface)').attr('stroke-width', 1.5)
+        .on('mouseover', (ev, d) => showTip(
+          `<b style="color:${PART_COLORS[s.part]}">${s.part}</b><br/>
+           ${d.date}<br/>Net Volume: <b>${fmtN(d.val)}</b>`, ev))
+        .on('mousemove', moveTip).on('mouseout', hideTip);
+    });
+
+    const lg = document.getElementById('tv-trend-legend');
+    lg.innerHTML = PARTS.map(p =>
+      `<div class="legend-item">
+         <div class="legend-line" style="background:${PART_COLORS[p]};
+           border-bottom:2px dashed ${PART_COLORS[p]};height:0"></div>${p}
+       </div>`).join('');
+  }
+
+  /* ── Wire participant tab ── */
+  function renderParticipantTab(data) {
+    const oiData = (data.oi || {}).data || {};
+    const tvData = (data.tv || {}).data || {};
+    const dates  = (data.oi || {}).dates || [];
+    const latest = dates[dates.length - 1];
+    if (!latest) return;
+
+    document.getElementById('part-latest-tag').textContent = latest;
+    drawPartTrend(oiData, dates);
+    drawPartLS(oiData, latest);
+    drawLSRatio(oiData, dates);
+    drawInstrument(oiData, latest);
+    drawTVTrend(tvData, dates);
+  }
+
   /* ── Call chart functions ── */
   const oiData = data.oi || {};
   drawTrend(oiData.data || {}, dates);
   drawBreakdown(oiData.data || {}, latest);
   drawDoD(data.dod || {}, (data.dod || {}).pairs || []);
 
+
+  renderParticipantTab(data);
 
   console.log('[FAO Claude] Overview rendered. D3 version:', d3.version);
 }
