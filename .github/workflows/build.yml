@@ -41,15 +41,20 @@ jobs:
         #   docs/data.json                 — JSON data contract for website
 
       # ── 4. Move outputs to correct locations ─────────────────────────────
-      - name: Move Excel to outputs/ and data.json to docs/
+      - name: Move Excel to outputs/ and docs/outputs/
         run: |
-          # Move Excel file(s) from data/ to outputs/
+          mkdir -p outputs docs/outputs
           for f in data/FAOCLAUDE*.xlsx; do
-            [ -f "$f" ] && mv "$f" outputs/ && echo "Moved $f to outputs/"
+            if [ -f "$f" ]; then
+              cp "$f" outputs/
+              cp "$f" docs/outputs/
+              rm "$f"
+              echo "Copied $(basename $f) to outputs/ and docs/outputs/"
+            fi
           done
-
           # data.json already written directly to docs/ via --json-out
           [ -f docs/data.json ] && echo "docs/data.json present" || echo "WARNING: docs/data.json missing"
+
 
       # ── 5. Run website generator ─────────────────────────────────────────
       - name: Generate website
@@ -82,6 +87,7 @@ jobs:
           git add docs/data.json
           git add docs/index.html
           git add docs/meta.json
+          git add docs/outputs/
           git add outputs/
 
           if git diff --cached --quiet; then
